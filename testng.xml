@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="RossTestSuite" parallel="none">
+  <test name="ExampleTestNgTest" preserve-order="false">
+    <classes>
+      <class name="com.goc.ExampleTestNgTest"/>
+    </classes>
+  </test>
+</suite>

@@ -1,0 +1,167 @@
+#!/usr/bin/perl
+
+#########################################################################################################################
+#														                                                               	#		
+#       This is a generic perl script used to interface with ANT                        								#	
+#       Usage : ./ant <target>										                                             		#
+#														                                                             	#
+#########################################################################################################################
+
+use Cwd qw(abs_path);
+use Getopt::Long;
+use Cwd;
+use Sys::Hostname;
+
+my $failure_msg = "BUILD FAILED";
+
+## Parse command line options
+GetOptions(
+	'q|quiet' => \$quiet,
+	'd|debug' => \$debug,
+	'p|projecthelp' => \$projectHelp,
+	'antparams=s'	=> \@antparams,
+);
+
+# set the project working directory
+my $workingDir = getcwd;
+print "workingDirectory:  $workingDir\n" if $debug;
+my $defaultProjectDir = substr($workingDir, 0, rindex($workingDir, '/'));
+print "default project directory is : $defaultProjectDir\n" if $debug;
+$ENV{"project.dir"} = $defaultProjectDir;
+$ENV{"env.project.dir"} = $defaultProjectDir;
+my $build_path = $workingDir;
+
+# Fail if default.properties is missing.
+#
+if ( -f "$build_path/default.properties" ) {
+	$propfile = "./default.properties";
+}
+else {
+	die "Missing default.properties. $failure_msg\n";
+}
+
+
+parse_property_file("$build_path/default.properties");
+parse_property_file("$build_path/build.properties");
+parse_property_file("$build_path/user.properties");
+parse_property_file("$build_path/server.properties");
+substitute_vars();
+validate_env();
+set_ext_dirs();
+
+my $inp = join( " ", @ARGV );
+$inp = "-q $inp" if ($quiet);
+$inp = "-d $inp" if ($debug);
+$inp = "-p" if ($projectHelp);
+my $antargs = "";
+if (@antparams) {
+	foreach my $antarg (@antparams) {
+		$antargs = $antargs . ' -D"' . $antarg . '"';
+	}
+}
+print "ant args $antargs \n" if $debug;
+$inp = "$antargs $inp";
+print "Using ARGV = $inp\n" if $debug;
+
+chdir "$build_path";
+my $cmdline = "$ENV{JAVA_HOME}/bin/java -Xmx512m -Djava.ext.dirs=\"$ENV{EXT_DIRS}\"  org.apache.tools.ant.Main -emacs $inp";
+print "cmdline = " . $cmdline if $debug;
+system($cmdline);
+my $retval=$? >> 8;
+print "retval $retval \n" if $debug;
+exit $retval;
+
+#
+#--> main program end
+#--> start of subroutines
+#
+
+# does all validation and return product's home dir on success
+#
+sub validate {
+	my $product      = shift;
+	my $product_home = "$ENV{$product.'.home'}";
+
+	die "$product.home is not defined. \n$failure_msg\n" if ( !$product_home );
+	$product_home = "$product_home/build";
+
+	die "$product_home does not exist. \n$failure_msg\n" if ( !-d $product_home );
+	return ($product_home);
+}
+
+# Parse property files
+#
+sub parse_property_file {
+
+	my $propfile = shift;
+	my $saveMap = shift;
+
+	if ( -f $propfile ) {
+		open BUILDPROP, "$propfile" or die "Cannot open $propfile\n";
+
+		while (<BUILDPROP>) {
+			chomp;
+			next if (/^#/);    # ignore comments
+			s/^\s+//;          # ignore beginning white space
+			s/\s+$//;          # ignore trailing white space
+			next unless length;    # anything left? ignore blank lines
+			my ( $var, $value ) = split( /\s*=\s*/, $_, 2 );
+			if ($saveMap) {
+				$saveMap->{$var} = $value;
+			}
+			else {
+				$ENV{$var} = $value;
+			}
+		}
+
+		close BUILDPROP;
+	}
+
+}
+
+# Variable substitution for references
+#
+sub substitute_vars {
+	foreach $key ( keys %ENV ) {
+		while ( $ENV{$key} =~ /\${([^}]+)}/ ) {
+			die
+"Undefined property \${$1} specified in build.properties, exiting\n"
+			  if !exists $ENV{$1};
+			$rep = $ENV{$1};
+			$ENV{$key} =~ s/\${$1}/$rep/;
+		}
+		print "key: $key, value: $ENV{$key}\n" if ($debug);
+	}
+}
+
+# Validate environment
+#
+sub validate_env {
+	print "ANT_HOME  = $ENV{ANT_HOME}\n"  if $debug;    
+	print "JAVA_HOME = $ENV{JAVA_HOME}\n" if $debug;
+
+	if ( !-d $ENV{JAVA_HOME} ) {
+		die
+"Invalid or unspecified JAVA_HOME: $ENV{JAVA_HOME} in your environment or build.properties.\n";
+	}
+	if ( !-d $ENV{ANT_HOME} ) {
+		die
+"Invalid or unspecified ANT_HOME: $ENV{ANT_HOME} in your environment or build.properties.\n";
+	}
+}
+
+# Set ext dirs used by ant
+#
+sub set_ext_dirs{
+	
+	my $delim = ";";
+	if ( "$^O" =~ m/linux|darwin|solaris/ ) {
+		$delim = ":";
+	}
+	
+	@extdirs = (
+		"$ENV{JAVA_HOME}/lib", "$ENV{ANT_HOME}/lib", "$ENV{ANT_HOME}/lib/checkstyle"
+	);
+	$ENV{EXT_DIRS} = join( "$delim", @extdirs );
+}  
+

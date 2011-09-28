@@ -1,0 +1,68 @@
+<project name="ROSS Test Framework" basedir=".">
+
+	<!-- Property files read in -->
+	<property file="user.properties" />
+	<property file="default.properties" />
+
+	<import file="${test.framework.dir}/build/build-run.xml" />
+
+	<!-- Directory path defines -->
+	<property name="project.dir" value=".." />
+
+	<property name="lib.dir" value="${project.dir}/lib" />
+	<!--	<property name="test.framework.lib.dir" value="${test.framework.dir}/lib" /> -->
+	<property name="src.dir" value="${project.dir}/src" />
+	<property name="output.dir" value="${project.dir}/output/" />
+	<property name="report.dir" value="${project.dir}/report" />
+
+	<property name="test.class.name" value="com.goc.ExampleTest" />
+
+	<path id="src.path">
+		<pathelement location="${src.dir}" />
+	</path>
+	<path id="build.classpath">
+		<fileset dir="${lib.dir}">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+
+	<path id="run.classpath">
+		<path refid="build.classpath" />
+		<pathelement location="${output.dir}" />
+	</path>
+
+	<target name="clean" description="Clean all artifacts">
+		<cleanModule destdir="${output.dir}" />
+	</target>
+
+	<target name="build" description="Build of the project's source">
+		<compileModule srcdir="${src.dir}" destdir="${output.dir}">
+			<classpathref>
+				<path refid="build.classpath" />
+			</classpathref>
+		</compileModule>
+	</target>
+
+	<target name="clean-build" description="Clean build">
+		<antcall target="clean" />
+		<antcall target="build" />
+	</target>
+
+	<target name="all" depends="clean,build" description="Clean build">
+	</target>
+
+	<target name="test" depends="clean,build" description="Run the test">
+		<runJUnit test="${test.class.name}" reportdir="${report.dir}" >
+			<classpathref>
+				<path refid="run.classpath" />
+			</classpathref>
+		</runJUnit> 
+
+		<runTestNg reportdir="${report.dir}">
+			<classpathref>
+				<path refid="run.classpath" />
+			</classpathref>
+		</runTestNg>
+	</target>
+
+</project>
